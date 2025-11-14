@@ -33,15 +33,10 @@ export async function getRooms(checkin, checkout) {
         const description = price.querySelector('[data-campo="descricao"]')?.innerText.trim() || "";
         const value = price.querySelector('[data-campo="valor"]')?.innerText.trim() || "";
 
-        if (title || description || value) {
-          pricesList.push({ title, description, value });
-        }
+        pricesList.push({ title, description, value });
       });
       const image = room.querySelector("img")?.src || "";
-
-      if (name) {
-        data.push({ name, description, caracteristicas, prices: pricesList, image });
-      }
+      data.push({ name, description, caracteristicas, prices: pricesList, image });
     });
 
     return data;

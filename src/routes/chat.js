@@ -50,110 +50,107 @@ router.post("/", async (req, res) => {
   try {
     let { clientId, message, conversationId } = req.body;
     let conversation;
-    let client = await ClientService.ensureClient(clientId);
+    const client = await ClientService.ensureClient(clientId);
 
-    if (client) {
-      conversation = await ConversationService.findOpenConversation({ clientId: client.id });
-      // Quando o cliente recarrega a página o histórico deve trazer toda a conversa.
-      if (conversation && !message) {
-        const history = await ConversationService.conversationHistory(conversation.id);
-        return res.json({
-          clientId: client.id,
-          conversationId: conversation.id,
-          reply: history.map(m => ({
-            type: m.type,
-            text: m.text,
-            sender: m.sender
-          }))
-        });
-      }
-
-      if (!conversation) {
-        conversation = await ConversationService.createConversation({ clientId: client.id })
-      }
-
-      if (message) {
-        await MessageService.saveMessage({
-          conversationId: conversation.id,
-          sender: "user",
-          text: message.text,
-          type: message.type
-        });
-      }
-
-      let currentStep = getStep(conversation.step);
-
-      if ((currentStep.type === "question" || currentStep.type === "date") && message) {
-        if (currentStep.onReceive) {
-          await currentStep.onReceive({ conversation, message, prisma });
-        }
-
-        let nextStep = currentStep.jump;
-
-        if (currentStep.condition) {
-          const dynamicJump = currentStep.condition({ message });
-          if (dynamicJump) {
-            nextStep = dynamicJump;
-          }
-        }
-
-        conversation = await ConversationService.updateConversation({
-          conversationId: conversation.id,
-          data: { step: currentStep.jump }
-        });
-
-        currentStep = getStep(currentStep.jump);
-      }
-
-      let reply = [];
-      let step = currentStep;
-
-      while (step) {
-        let treatedText;
-
-        if (step.script) {
-          treatedText = await step.script({ conversation });
-        }
-        else if (typeof step.text === "function") {
-          treatedText = step.text({ conversation });
-        }
-        else {
-          treatedText = step.text;
-        }
-
-        reply.push({ type: step.type, text: treatedText });
-
-        await MessageService.saveMessage({
-          conversationId: conversation.id,
-          sender: "bot",
-          type: step.type,
-          text: treatedText
-        });
-
-        if (step.type === "question" || step.type === "date") break;
-        if (!step.jump) break;
-
-        await ConversationService.updateConversation({
-          conversationId: conversation.id,
-          data: { step: currentStep.jump }
-        });
-
-        step = steps.find(s => s.step === step.jump);
-      }
-
-
-      // await MessageService.saveMessage({
-      //   conversationId: conversation.id,
-      //   sender: "bot",
-      //   type: currentStep.type,
-      //   text: currentStep.text
-      // });
-
-      res.json({
-        clientId,
+    conversation = await ConversationService.findOpenConversation({ clientId: client.id });
+    // Quando o cliente recarrega a página o histórico deve trazer toda a conversa.
+    if (conversation && !message) {
+      const history = await ConversationService.conversationHistory(conversation.id);
+      return res.json({
+        clientId: client.id,
         conversationId: conversation.id,
-        reply
+        messages: history.map(m => ({
+          type: m.type,
+          text: m.text,
+          sender: m.sender
+        }))
       });
+    }
+
+    if (!conversation) {
+      conversation = await ConversationService.createConversation({ clientId: client.id })
+    }
+
+    if (message) {
+      await MessageService.saveMessage({
+        conversationId: conversation.id,
+        sender: "user",
+        text: message.text,
+        type: message.type
+      });
+    }
+
+    let currentStep = getStep(conversation.step);
+
+    if ((currentStep.type === "question" || currentStep.type === "date") && message) {
+      if (currentStep.onReceive) {
+        await currentStep.onReceive({ conversation, message, prisma });
+      }
+
+      let nextStep = currentStep.jump;
+
+      if (currentStep.condition) {
+        const dynamicJump = currentStep.condition({ message });
+        if (dynamicJump) {
+          nextStep = dynamicJump;
+        }
+      }
+
+      conversation = await ConversationService.updateConversation({
+        conversationId: conversation.id,
+        data: { step: currentStep.jump }
+      });
+
+      currentStep = getStep(currentStep.jump);
+    }
+
+    const reply = [];
+    let step = currentStep;
+
+    while (step) {
+      let treatedText;
+
+      if (step.script) {
+        treatedText = await step.script({ conversation });
+      }
+      else if (typeof step.text === "function") {
+        treatedText = step.text({ conversation });
+      }
+      else {
+        treatedText = step.text;
+      }
+
+      reply.push({ type: step.type, text: treatedText });
+
+      await MessageService.saveMessage({
+        conversationId: conversation.id,
+        sender: "bot",
+        type: step.type,
+        text: treatedText
+      });
+
+      if (step.type === "question" || step.type === "date") break;
+      if (!step.jump) break;
+
+      await ConversationService.updateConversation({
+        conversationId: conversation.id,
+        data: { step: currentStep.jump }
+      });
+
+      step = steps.find(s => s.step === step.jump);
+    }
+    // await MessageService.saveMessage({
+    //   conversationId: conversation.id,
+    //   sender: "bot",
+    //   type: currentStep.type,
+    //   text: currentStep.text
+    // });
+
+    res.json({
+      clientId,
+      conversationId: conversation.id,
+      reply
+    });
 
       // Iniciando fluxo mockado. Com start -> name -> destino -> checkin -> checkout
       // switch (conversation.step) {
@@ -254,7 +251,6 @@ router.post("/", async (req, res) => {
       //     break;
       //   }
       // }
-    }
 
     // if (!clientId) {
     //   console.log('entrou no carai do if')
